@@ -16,7 +16,7 @@ def compara_p_dmt_views(dir: str, archivo_vista: str, archivo_compara: str):
             formato_encontrado: str = 'no'
             with open(f"{dir}{archivo_vista}", newline="", encoding="UTF-8") as archivo_1:
                 for linea1 in archivo_1:
-                    linea1 = re.sub(' +', ' ', linea1)  # si hay mas de 1 espacio entre palabras, deja 1 solo
+                    linea1 = linea1.replace(' ', '') #quita espacios
                     #Determina si el script está comentado
                     if script_comentado == 0 and linea1.find('/*') != -1:
                         script_comentado = 1
@@ -41,10 +41,11 @@ def compara_p_dmt_views(dir: str, archivo_vista: str, archivo_compara: str):
                     if script_comentado == 0 and linea1.upper().find(linea_lista2[0].upper()) != -1:
                         campo_encontrado = 'si'
                         if linea_lista2[1] == 'DATE' or \
-                                ((linea1.upper().find(f'{linea_lista2[1]} as {linea_lista2[0]}'.upper()) != -1) or (linea1.upper().find(f'{linea_lista2[1]}) as {linea_lista2[0]}'.upper()) != -1)):
+                                ((linea1.upper().find(f'{linea_lista2[1]}as{linea_lista2[0]}'.upper()) != -1) or (linea1.upper().find(f'{linea_lista2[1]})as{linea_lista2[0]}'.upper()) != -1)):
                             formato_encontrado = 'si'
                         elif (linea1.upper().find(f'{linea_lista2[1]}'.upper()) != -1):
                             formato_encontrado = 'si-suelto'
+                        break
 
                     if script_comentado == -1 or script_comentado == 10:
                         script_comentado = 0
