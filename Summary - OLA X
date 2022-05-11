@@ -1,0 +1,127 @@
+import os
+import re
+
+def compara_p_dmt_views(dir: str, archivo_vista: str, archivo_compara: str):
+
+    linea_lista2: list = []
+    contador_problemas: int = 0
+    script_comentado = 0 #chequea si lo que esta analizando está comentado en el script
+    with open(f'{dir}{archivo_compara}', newline="", encoding="UTF-8") as archivo_2:
+        for linea2 in archivo_2:
+            linea2 = linea2.rstrip() #remueve espacios y simbolos al final de la linea
+            linea2 = linea2.replace(' ', '	')  #Modifica un tipo de espacio con otro necesario para que funcione el script
+            linea2 = linea2.replace('ALPHANUMERIC', 'VARCHAR') #Reemplaza alphanumeric por varchar
+            linea_lista2 = linea2.split('	')
+            campo_encontrado: str = 'no'
+            formato_encontrado: str = 'no'
+            with open(f"{dir}{archivo_vista}", newline="", encoding="UTF-8") as archivo_1:
+                for linea1 in archivo_1:
+                    linea1 = re.sub(' +', ' ', linea1)  # si hay mas de 1 espacio entre palabras, deja 1 solo
+                    #Determina si el script está comentado
+                    if script_comentado == 0 and linea1.find('/*') != -1:
+                        script_comentado = 1
+                    elif script_comentado > 1 and linea1.find('*/') != -1:
+                        script_comentado = -1
+
+                    if linea1.find('/*') != -1 and linea1.find('*/') != -1: #Prueba error
+                        print('\nERROR CRITICO\nSe encuentran ambos simbolos de comentar y descomentar /* */ en una misma linea, esto puede romper el programa.\nQuitarlos del script y volver a correr\n')
+
+                    if (script_comentado == 1 and linea1.upper().find(linea_lista2[0].upper()) != -1 and linea1.find('/*') < linea1.upper().find(linea_lista2[0].upper())) or \
+                            (script_comentado > 1 and linea1.upper().find(linea_lista2[0].upper()) != -1) or \
+                            (script_comentado == -1 and linea1.upper().find(linea_lista2[0].upper()) != -1 and linea1.find('*/') > linea1.upper().find(linea_lista2[0].upper())):
+                        print(f'--------------------{linea_lista2[0]} está COMENTADO en la vista, agregarlo--------------------')
+
+                    elif script_comentado == -1 and linea1.upper().find(linea_lista2[0].upper()) != -1 and linea1.find('*/') < linea1.upper().find(linea_lista2[0].upper()):
+                        script_comentado = 0
+
+                    if linea1.find('--') != -1 and linea1.upper().find(linea_lista2[0].upper()) != -1 and linea1.find('--') < linea1.upper().find(linea_lista2[0].upper()):
+                        print(f'--------------------{linea_lista2[0]} está COMENTADO en la vista, agregarlo--------------------')
+                        script_comentado = 10 #codigo especial para script comentado con "--"
+
+                    if script_comentado == 0 and linea1.upper().find(linea_lista2[0].upper()) != -1:
+                        campo_encontrado = 'si'
+                        if linea_lista2[1] == 'DATE' or \
+                                ((linea1.upper().find(f'{linea_lista2[1]} as {linea_lista2[0]}'.upper()) != -1) or (linea1.upper().find(f'{linea_lista2[1]}) as {linea_lista2[0]}'.upper()) != -1)):
+                            formato_encontrado = 'si'
+                        elif (linea1.upper().find(f'{linea_lista2[1]}'.upper()) != -1):
+                            formato_encontrado = 'si-suelto'
+
+                    if script_comentado == -1 or script_comentado == 10:
+                        script_comentado = 0
+                    if script_comentado == 1:
+                        script_comentado += 1
+
+            if campo_encontrado == 'si' and formato_encontrado == 'no':
+                print(f'{linea_lista2[0]} SI ESTÁ en la vista pero no se pudo corroborar que el formato sea el correcto, confirmarlo por favor.')
+            elif campo_encontrado == 'si' and formato_encontrado == 'si':
+                print(f'{linea_lista2[0]} ESTÁ y su formato es correcto')
+            elif campo_encontrado == 'si' and formato_encontrado == 'si-suelto':
+                print(f'{linea_lista2[0]} ESTÁ y su formato se encontró suelto, revisar.')
+            elif campo_encontrado == 'no':
+                print(f'--------------------{linea_lista2[0]} no está en la vista, agregarlo--------------------')
+
+
+def convertir_estructura_datio(dir: str):
+    nombre = "tradeflowsbackofficeeom.output.schema"
+    nombre_nuevo_archivo = "archivo_a_comparar_python.sql"
+
+    if os.path.isdir(dir) and os.path.isfile(f'{dir}\{nombre_nuevo_archivo}'):
+        a = input('Se va a borrar el previo archivo archivo_a_comparar_python.sql, presione ENTER para seguir')
+        os.remove(f"{dir}\{nombre_nuevo_archivo}")
+
+        archivo_nuevo = open(f'{dir}\{nombre_nuevo_archivo}', 'a', encoding="UTF-8")
+        lineas_lista: list = []
+
+        with open(f"{dir}\{nombre}", newline="", encoding="UTF-8") as archivo_chequeo:
+            for linea in archivo_chequeo:
+                if '"name":' in linea:
+                    linea = linea[13:-3:1]
+                    lineas_lista.append(linea)
+
+        lineas_lista.pop(0)
+        linea = '\n'.join(lineas_lista)
+        archivo_nuevo.write(linea)
+        archivo_nuevo.close()
+        print(f'Nuevo archivo creado en {dir}\{nombre_nuevo_archivo}')
+
+def explicacion():
+    print('\n1- Tener en un archivo llamado "vista produccion.sql" con la vista de P_DMT_VIEWS de produccion.')
+    print('2- En otro archivo llamado "campos.sql" los campos y la estructura copiada y pegada desde el summary.')
+    print('   Deben verse de la siguiente forma:')
+    print('   campo_blabla DECIMAL(50)')
+    print('   campo_dos DATE')
+    print('   Esto lo haces si en el excel Summary ocultas las columnas que hay entre la columna de campos y la de sus formatos.')
+    print('   De esta manera copias todas las celdas a la vez.')
+    print('3- Por favor modificar la variable "dir". Se encuentra en la linea del script 105.')
+    print('   Debes escribir la carpeta en donde tengas ambos archivos ya mencionados (Muy importante en la variable no quitar la "r" que está antes del string).')
+    print('\n LISTO, YA PUEDES CORRER EL PROGRAMA\n')
+
+def main():
+    dir = r'C:\Users\IFarias\Documents\Comparar vistas' # Reemplazar esta variable con tu carpeta con archivos, SIN QUITAR la "r" antes del string----------------------------------
+
+    dir = dir + r'\\'
+    archivo_vista = 'vista produccion.sql'
+    archivo_compara = 'campos.sql'
+    menu = 'go'
+
+    while menu == 'go':
+        print('\nMENU\n1 - Convertir archivo de estructura de datio/data hub para poder comparar contra p_dw_to_datio')
+        print('2 - Comparar estructura de Summary contra vista p_dmt_views')
+        print('3 - GUIA - QUE HACER LA PRIMERA VEZ QUE INICIO ESTE PROGRAMA--------------------')
+        print('4 - SALIR')
+        eleccion = input('Elegir opcion, escriba 1 o 2 o 3 o 4: ')
+        while int(eleccion) not in (1, 2, 3, 4):
+            eleccion = input('Incorrecto, escriba 1 o 2 o 3 o 4: ')
+
+        if int(eleccion) == 1:
+            convertir_estructura_datio(dir)
+            volver = input('\nPresiona ENTER para volver al menu! ')
+        elif int(eleccion) == 2:
+            compara_p_dmt_views(dir, archivo_vista, archivo_compara)
+            volver = input('\nPresiona ENTER para volver al menu! ')
+        elif int(eleccion) == 3:
+            explicacion()
+            volver = input('\nPresiona ENTER para volver al menu! ')
+        elif int(eleccion) == 4:
+            exit()
+main()
